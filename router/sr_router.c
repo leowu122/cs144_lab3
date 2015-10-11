@@ -115,7 +115,7 @@ void sr_handlepacket(struct sr_instance* sr,
     memcpy(new_e_hdr->ether_shost, iface->addr, ETHER_ADDR_LEN);
     new_e_hdr->ether_type = htons(ethertype_arp);
     /* setup arp header */
-    new_a_hdr->ar_op = arp_op_reply;
+    new_a_hdr->ar_op = htons(arp_op_reply);
     memcpy(new_a_hdr->ar_sha, iface->addr, ETHER_ADDR_LEN);
     new_a_hdr->ar_sip = iface->ip;
     memcpy(new_a_hdr->ar_tha, a_hdr->ar_sha, ETHER_ADDR_LEN);
