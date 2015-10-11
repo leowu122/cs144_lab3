@@ -79,6 +79,55 @@ void sr_handlepacket(struct sr_instance* sr,
   printf("*** -> Received packet of length %d \n",len);
 
   /* fill in code here */
+  /* soh: handles ARP requests.
+   * 1. when the router receives an ARP request, it needs to check target IP
+   *    with its own and decide whether to send ARP reply or ignore it.
+   * 2. when the router forwards a packet, if the target MAC address is not known,
+   *    it needs to send an ARP request first to learn the target MAC address.
+   */
+  struct sr_if* iface = sr_get_interface(sr, interface);
+  struct sr_ethernet_hdr* e_hdr = 0;
+  struct sr_arp_hdr*       a_hdr = 0;
+
+  if (len < sizeof(struct sr_ethernet_hdr) + sizeof(struct sr_arp_hdr) )
+  { return; }
+
+  assert(iface);
+
+  e_hdr = (struct sr_ethernet_hdr*)packet;
+  a_hdr = (struct sr_arp_hdr*)(packet + sizeof(struct sr_ethernet_hdr));
+
+  if ( (e_hdr->ether_type == htons(ethertype_arp)) &&
+          (a_hdr->ar_op == htons(arp_op_request)) ) {
+    /* construct ARP reply and send */
+    struct sr_ethernet_hdr* new_e_hdr = 0;
+    struct sr_arp_hdr* new_a_hdr = 0;
+    uint8_t *new_pkt = (uint8_t *)malloc(len);
+    if (!new_pkt) {
+      perror("malloc failed");
+      return;
+    }
+    memcpy(new_pkt, packet, len);
+    new_e_hdr = (struct sr_ethernet_hdr*)new_pkt;
+    new_a_hdr = (struct sr_arp_hdr*)(new_pkt + sizeof(struct sr_ethernet_hdr));
+    /* setup ethernet header */
+    memcpy(new_e_hdr->ether_dhost, a_hdr->ar_sha, ETHER_ADDR_LEN);
+    memcpy(new_e_hdr->ether_shost, iface->addr, ETHER_ADDR_LEN);
+    new_e_hdr->ether_type = htons(ethertype_arp);
+    /* setup arp header */
+    new_a_hdr->ar_op = arp_op_reply;
+    memcpy(new_a_hdr->ar_sha, iface->addr, ETHER_ADDR_LEN);
+    new_a_hdr->ar_sip = iface->ip;
+    memcpy(new_a_hdr->ar_tha, a_hdr->ar_sha, ETHER_ADDR_LEN);
+    new_a_hdr->ar_tip = a_hdr->ar_sip;
+
+    /* send! */
+    int res = sr_send_packet(sr, new_pkt, len, interface);
+    if (res != 0) {
+      fprintf(stderr, "Error sending ARP reply\n");
+      return;
+    }
+  }
 
 }/* end sr_ForwardPacket */
 
