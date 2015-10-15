@@ -45,7 +45,7 @@ void sr_init(struct sr_instance* sr)
     pthread_t thread;
 
     pthread_create(&thread, &(sr->attr), sr_arpcache_timeout, sr);
-    
+
     /* Add initialization code here! */
 
 } /* -- sr_init -- */
@@ -71,6 +71,8 @@ void sr_handlepacket(struct sr_instance* sr,
         unsigned int len,
         char* interface/* lent */)
 {
+  uint16_t ethertype;
+
   /* REQUIRES */
   assert(sr);
   assert(packet);
@@ -79,16 +81,78 @@ void sr_handlepacket(struct sr_instance* sr,
   printf("*** -> Received packet of length %d \n",len);
 
   /* fill in code here */
-  /* soh: handles ARP requests.
-   * 1. when the router receives an ARP request, it needs to check target IP
-   *    with its own and decide whether to send ARP reply or ignore it.
-   * 2. when the router forwards a packet, if the target MAC address is not known,
-   *    it needs to send an ARP request first to learn the target MAC address.
-   */
+
+  ethertype = ethertype(packet);
+  if (ethertype == ethertype_ip) {
+    handle_ip_packet(sr, packet, len, interface);
+  } else if (ethertype == ethertype_arp) {
+    handle_arp_packet(sr, packet, len, interface);
+  } else {
+    fprintf(stderr, "Unsupported ethertype: %d\n", ethertype);
+  }
+}/* end sr_ForwardPacket */
+
+/**
+ * TODO: Laura
+ *
+ * Validates the IP packet (minimum length, checksum, etc.). Returns 1 if the packet is valid, and 0 otherwise.
+ * Use this in handle_ip_packet();
+ */
+int is_ip_packet_valid(struct sr_instance* sr, uint8_t *packet, unsigned int len) {
+
+}
+
+/**
+ * TODO: Laura
+ */
+void handle_ip_packet(struct sr_instance* sr, uint8_t *packet, unsigned int len, char *interface) {
+
+}
+
+/**
+ * TODO: Leo
+ *
+ * Validates the ICMP packet (minimum length, checksum, etc.). Returns 1 if the packet is valid, and 0 otherwise.
+ * Use this before sending the ICMP packet in send_icmp_packet().
+ */
+int is_ip_packet_valid(struct sr_instance* sr, uint8_t *packet, unsigned int len) {
+
+}
+
+/**
+ * TODO: Leo
+ */
+void send_icmp_packet(uint8_t icmp_type, uint8_t icmp_code, struct sr_instance* sr,
+                      uint8_t *packet, unsigned int len, char *interface) {
+
+}
+
+/**
+ * TODO: Sukwon
+ *
+ * Validates the ARP packet (minimum length, etc.). Returns 1 if the packet is valid, and 0 otherwise.
+ * Use this in handle_arp_packet();
+ */
+int is_arp_packet_valid(struct sr_instance* sr, uint8_t *packet, unsigned int len) {
+
+}
+
+/**
+ * TODO: Sukwon
+ *
+ * soh: handles ARP requests.
+ * 1. when the router receives an ARP request, it needs to check target IP
+ *    with its own and decide whether to send ARP reply or ignore it.
+ * 2. when the router forwards a packet, if the target MAC address is not known,
+ *    it needs to send an ARP request first to learn the target MAC address.
+ */
+void handle_arp_packet(struct sr_instance* sr, uint8_t *packet, unsigned int len, char *interface) {
   struct sr_if* iface = sr_get_interface(sr, interface);
+  // TODO: Why not use the typedef sr_ethernet_hdr_t and sr_arp_hdr_t?
   struct sr_ethernet_hdr* e_hdr = 0;
   struct sr_arp_hdr*       a_hdr = 0;
 
+  // TODO: perhaps move this to is_arp_packet_valid()?
   if (len < sizeof(struct sr_ethernet_hdr) + sizeof(struct sr_arp_hdr) )
   { return; }
 
@@ -98,7 +162,7 @@ void sr_handlepacket(struct sr_instance* sr,
   a_hdr = (struct sr_arp_hdr*)(packet + sizeof(struct sr_ethernet_hdr));
 
   if ( (e_hdr->ether_type == htons(ethertype_arp)) &&
-          (a_hdr->ar_op == htons(arp_op_request)) ) {
+       (a_hdr->ar_op == htons(arp_op_request)) ) {
     /* construct ARP reply and send */
     struct sr_ethernet_hdr* new_e_hdr = 0;
     struct sr_arp_hdr* new_a_hdr = 0;
@@ -128,6 +192,4 @@ void sr_handlepacket(struct sr_instance* sr,
       return;
     }
   }
-
-}/* end sr_ForwardPacket */
-
+}
