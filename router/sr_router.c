@@ -115,7 +115,7 @@ void handle_ip_packet(struct sr_instance* sr, uint8_t *packet, unsigned int len,
  * Validates the ICMP packet (minimum length, checksum, etc.). Returns 1 if the packet is valid, and 0 otherwise.
  * Use this before sending the ICMP packet in send_icmp_packet().
  */
-int is_ip_packet_valid(struct sr_instance* sr, uint8_t *packet, unsigned int len) {
+int is_icmp_packet_valid(struct sr_instance* sr, uint8_t *packet, unsigned int len) {
 
 }
 
