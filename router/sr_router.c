@@ -117,7 +117,7 @@ void handle_ip_packet(struct sr_instance* sr, uint8_t *packet, unsigned int len,
  */
 int is_icmp_packet_valid(struct sr_instance* sr, uint8_t *packet, unsigned int len) 
 {
-    assert(sr);
+    	assert(sr);
 	assert(packet);
 	
 	minlength += sizeof(sr_icmp_hdr_t);
