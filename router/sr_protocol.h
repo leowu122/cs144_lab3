@@ -198,5 +198,7 @@ struct sr_arp_hdr
 typedef struct sr_arp_hdr sr_arp_hdr_t;
 
 #define sr_IFACE_NAMELEN 32
+#define ICMP_ECHO_REQUEST 8
+#define ICMP_ECHO_REPLY   0
 
 #endif /* -- SR_PROTOCOL_H -- */
