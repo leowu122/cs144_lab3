@@ -149,6 +149,19 @@ struct sr_ethernet_hdr
 typedef struct sr_ethernet_hdr sr_ethernet_hdr_t;
 
 
+enum sr_icmp_code {
+    icmp_code_0,
+    icmp_code_1,
+    icmp_code_2,
+    icmp_code_3
+};
+
+enum sr_icmp_type {
+    icmp_type_0,
+    icmp_type_1,
+    icmp_type_3 = 3,
+    icmp_type_11 = 11
+};
 
 enum sr_ip_protocol {
   ip_protocol_icmp = 0x0001,

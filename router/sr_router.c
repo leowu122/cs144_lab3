@@ -22,6 +22,14 @@
 #include "sr_arpcache.h"
 #include "sr_utils.h"
 
+// Internal function declarations
+int is_ip_packet_valid(sr_ip_hdr_t *ip_header, unsigned int len);
+int get_ip_ihl_bytes(sr_ip_hdr_t *ip_header);
+struct sr_rt *find_longest_prefix_match(struct sr_instance *sr, sr_ip_hdr_t *ip_header);
+int should_forward_ip_packet(struct sr_instance *sr, sr_ip_hdr_t *ip_header);
+void forward_ip_packet(struct sr_instance *sr, uint8_t *packet, unsigned int len, struct sr_rt *routing_entry);
+void handle_ip_packet(struct sr_instance *sr, uint8_t *packet, unsigned int len, char *interface);
+
 /*---------------------------------------------------------------------
  * Method: sr_init(void)
  * Scope:  Global
@@ -93,20 +101,203 @@ void sr_handlepacket(struct sr_instance* sr,
 }/* end sr_ForwardPacket */
 
 /**
- * TODO: Laura
- *
- * Validates the IP packet (minimum length, checksum, etc.). Returns 1 if the packet is valid, and 0 otherwise.
- * Use this in handle_ip_packet();
+ * Validates the IP packet by checking the minimum length, checksum, etc. from the given IP header.
+ * Returns 1 if the packet is valid, and 0 otherwise.
  */
-int is_ip_packet_valid(struct sr_instance* sr, uint8_t *packet, unsigned int len) {
+int is_ip_packet_valid(sr_ip_hdr_t *ip_header, unsigned int len) {
+  uint16_t expected_checksum;
+  int ip_ihl_bytes = get_ip_ihl_bytes(ip_header);
 
+  // Check the minimum length of the IP packet. An IP packet should at least have
+  // the Ethernet header (which includes the MAC header) and the IP header. It should
+  // also at least satisfy the IP header length (IHL).
+  if (len < sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) ||
+      len < sizeof(sr_ethernet_hdr_t) + ip_ihl_bytes) {
+    return 0;
+  }
+
+  // Check that the checksum in the IP header is as expected
+  expected_checksum = cksum(ip_header, ip_ihl_bytes);
+  if (ip_header->ip_sum != expected_checksum) {
+    return 0;
+  }
+
+  // The IP packet is valid
+  return 1;
 }
 
 /**
- * TODO: Laura
+ * Returns the IHL (Internet Header Length) for the given IP header in bytes.
  */
-void handle_ip_packet(struct sr_instance* sr, uint8_t *packet, unsigned int len, char *interface) {
+int get_ip_ihl_bytes(sr_ip_hdr_t *ip_header) {
+  //The ip_hl field is 4 bits, and specifies the length of the IP header
+  // in 32-bit words (equivalent to 4-bytes). So the header length is actually
+  // ip_hl * 32 bits or ip_hl * 4 bytes.
+  return ip_header->ip_hl * 4;
+}
 
+/**
+ * Finds and returns the entry in the given simple router's routing table that has the
+ * longest prefix match with the destination IP address in the given IP header. Returns 0
+ * if no entry in the routing table matches the destination IP address.
+ */
+struct sr_rt *find_longest_prefix_match(struct sr_instance *sr, sr_ip_hdr_t *ip_header) {
+  struct sr_rt *longest_prefix_match;
+  sr_rt *current_entry;
+  uint32_t current_entry_prefix;
+  uint32_t current_mask;
+  uint32_t dest_ip_prefix;
+
+  longest_prefix_match = 0;
+  current_entry = sr->routing_table;
+
+  while (current_entry) {
+    // Get the prefixes of the destination IP address in the IP header and the destination IP address
+    // of the current routing entry, using the current entry's mask
+    current_mask = current_entry->mask.s_addr;
+    current_entry_prefix = current_entry->dest.s_addr & current_mask;
+    dest_ip_prefix = ip_header->ip_dst & current_mask;
+
+    // If the prefixes match, and the current mask is longer than the mask of the previous
+    // longest_prefix_match, then update the longest_prefix_match
+    if (current_entry_prefix == dest_ip_prefix &&
+        (!longest_prefix_match || current_mask > longest_prefix_match->mask.s_addr)) {
+      longest_prefix_match = current_entry;
+    }
+
+    current_entry = current_entry->next;
+  }
+
+  return longest_prefix_match;
+}
+
+/**
+ * Returns 1 if the given simple router instance sr should forward the packet (i.e. the packet
+ * is not destined for one of the simple router's IP addresses), and 0 otherwise.
+ */
+int should_forward_ip_packet(struct sr_instance *sr, sr_ip_hdr_t *ip_header) {
+  sr_if* current_interface = sr->if_list;
+
+  while (current_interface) {
+    if (current_interface->ip == ip_header->ip_dst) {
+      // The packet's destination IP address matches one of the interface's IP in the simple router,
+      // so the packet is destined for this router. Therefore it shouldn't be forwarded.
+      return 0;
+    }
+
+    current_interface = current_interface->next;
+  }
+
+  // The packet's destination IP address does not match any interface IPs, so the packet
+  // should be forwarded.
+  return 1;
+}
+
+/**
+ * Forwards the given packet of length len to the next hop address specified in the given routing_entry.
+ * The caller of this method must ensure that the TTL is still valid and that there is an entry in the
+ * routing table that matches the destination IP address (given by routing_entry).
+ */
+void forward_ip_packet(struct sr_instance *sr, uint8_t *packet, unsigned int len, struct sr_rt *routing_entry) {
+  sr_ethernet_hdr_t *ethernet_header;
+  sr_ip_hdr_t *ip_header;
+  uint8_t *forward_packet;
+  struct sr_if *outgoing_interface;
+  struct sr_arpentry *cached_arp;
+  struct sr_arpreq *arp_req;
+  int error;
+
+  forward_packet = (uint8_t *) malloc(len);
+  if (!forward_packet) {
+    perrror("forward_ip_packet() error on malloc");
+    return;
+  }
+
+  // Make a copy of the original packet
+  memcpy(forward_packet, packet, len);
+  ethernet_header = (sr_ethernet_hdr_t *) forward_packet;
+  ip_header = (sr_ip_hdr_t *) (forward_packet + sizeof(sr_ethernet_hdr_t));
+
+  // Recompute the checksum
+  ip_header->ip_sum = cksum(ip_header, get_ip_ihl_bytes(ip_header));
+
+  // Get the cached ARP entry for the next-hop IP address, if available.
+  // Note that the gateway (gw) in the routing_entry is the next hop IP address.
+  // See http://superuser.com/questions/109021/what-does-gateway-in-routing-table-refer-to
+  outgoing_interface = sr_get_interface(sr, routing_entry->interface);
+  cached_arp = sr_arpcache_lookup(&sr->cache, routing_entry->gw.s_addr);
+
+  if (cached_arp) {
+    // There is a cached ARP entry, so we have the required MAC address.
+    // Set up the packet and send it.
+
+    // Update the Ethernet header
+    memcpy(ethernet_header->ether_dhost, cached_arp->mac, ETHER_ADDR_LEN);
+    memcpy(ethernet_header->ether_shost, outgoing_interface->addr, ETHER_ADDR_LEN);
+
+    error = sr_send_packet(sr, forward_packet, len, routing_entry->interface);
+    if (error) {
+      fprintf(stderr, "Error forwarding IP packet\n");
+    }
+
+    free(cached_arp);
+  } else {
+    // There is no cached ARP entry, so we need to send an ARP request and add this packet to the queue.
+    arp_req = sr_arpcache_queuereq(&sr->cache, routing_entry->gw.s_addr, forward_packet, len, routing_entry->interface);
+
+    // TODO: Sukwon - this is a transition to the ARP request part. Please see the pseuo-code at the beginning of sr_arpcache.h
+    handle_arpreq(arp_req);
+  }
+
+  free(forward_packet);
+}
+
+/**
+ * Handles the given IP packet of length len received on the passed in interface. The packet is
+ * complete with Ethernet header. This method should either forward the packet or, if it's not destined
+ * for one of the router's IP addresses, should send ICMP messages back to the sending host.
+ */
+void handle_ip_packet(struct sr_instance *sr, uint8_t *packet, unsigned int len, char *interface) {
+  sr_ip_hdr_t *ip_header;
+  struct sr_rt *longest_prefix_match;
+
+  // The IP header comes after the Ethernet header
+  sr_ip_hdr_t *ip_header = (sr_ip_hdr_t *) (packet + sizeof(sr_ethernet_hdr_t));
+
+  // Sanity-check the packet and drop it if it's invalid
+  if (!is_ip_packet_valid(ip_header, len)) {
+    return;
+  }
+
+  if (should_forward_ip_packet(sr, ip_header)) {
+    longest_prefix_match = find_longest_prefix_match(sr, ip_header);
+
+    if (!longest_prefix_match) {
+      // No matching destination address in the routing table. Send ICMP destination net unreachable
+      send_icmp_packet(icmp_type_3, icmp_code_0, sr, packet, len, interface);
+      return;
+    }
+
+    ip_header->ip_ttl--;
+    if (ip_header->ip_ttl <= 0) {
+      // Send ICMP time exceeded
+      send_icmp_packet(icmp_type_11, icmp_code_0, sr, packet, len, interface);
+      return;
+    }
+
+    // Otherwise, it's possible to send the packet
+    forward_ip_packet(sr, packet, len, longest_prefix_match);
+  } else {
+    // The packet is sent for one of the interface IP addresses in the simple router
+
+    if (ip_protocol(ip_header) == ip_protocol_icmp) {
+      // The packet is an ICMP echo request, so send ICMP echo reply to the sender
+      send_icmp_packet(icmp_type_0, icmp_code_0, sr, packet, len, interface);
+    } else {
+      // The packet contains a TCP or UDP payload, so send ICMP port unreachable to the sender
+      send_icmp_packet(icmp_type_3, icmp_code_3, sr, packet, len, interface);
+    }
+  }
 }
 
 /**
@@ -122,8 +313,9 @@ int is_icmp_packet_valid(struct sr_instance* sr, uint8_t *packet, unsigned int l
 /**
  * TODO: Leo
  */
-void send_icmp_packet(uint8_t icmp_type, uint8_t icmp_code, struct sr_instance* sr,
+void send_icmp_packet(sr_icmp_type icmp_type, sr_icmp_code icmp_code, struct sr_instance* sr,
                       uint8_t *packet, unsigned int len, char *interface) {
+  // TODO: make sure to call is_icmp_packet_valid() before proceeding to send the ICMP packet
 
 }
 
