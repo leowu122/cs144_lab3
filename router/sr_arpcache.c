@@ -247,3 +247,5 @@ void *sr_arpcache_timeout(void *sr_ptr) {
     return NULL;
 }
 
+void handle_arpreq(struct sr_arpreq *req) {
+}
