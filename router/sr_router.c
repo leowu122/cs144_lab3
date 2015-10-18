@@ -239,6 +239,7 @@ void forward_ip_packet(struct sr_instance *sr, uint8_t *packet, unsigned int len
   ip_header = (sr_ip_hdr_t *) (forward_packet + sizeof(sr_ethernet_hdr_t));
 
   /* Recompute the checksum */
+  ip_header->ip_sum = 0;
   ip_header->ip_sum = cksum(ip_header, get_ip_ihl_bytes(ip_header));
 
   /**
