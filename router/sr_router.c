@@ -111,7 +111,7 @@ void sr_handlepacket(struct sr_instance* sr,
  * Returns 1 if the packet is valid, and 0 otherwise.
  */
 int is_ip_packet_valid(sr_ip_hdr_t *ip_header, unsigned int len) {
-  uint16_t expected_checksum;
+  uint16_t expected_checksum, actual_checksum;
   int ip_ihl_bytes = get_ip_ihl_bytes(ip_header);
 
   /** 
@@ -125,8 +125,10 @@ int is_ip_packet_valid(sr_ip_hdr_t *ip_header, unsigned int len) {
   }
 
   /* Check that the checksum in the IP header is as expected */
+  actual_checksum = ip_header->ip_sum;
+  ip_header->ip_sum = 0;
   expected_checksum = cksum(ip_header, ip_ihl_bytes);
-  if (ip_header->ip_sum != expected_checksum) {
+  if (actual_checksum != expected_checksum) {
     return 0;
   }
 
