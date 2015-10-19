@@ -302,7 +302,7 @@ void send_arp_pkt(struct sr_instance *sr, uint32_t dst_ip, struct sr_if *iface) 
     new_a_hdr->ar_op = htons(arp_op_request);
     memcpy(new_a_hdr->ar_sha, iface->addr, ETHER_ADDR_LEN);
     new_a_hdr->ar_sip = iface->ip;
-    /*memcpy(new_a_hdr->ar_tha, broadcast_addr, ETHER_ADDR_LEN);*/
+    memcpy(new_a_hdr->ar_tha, broadcast_addr, ETHER_ADDR_LEN);
     new_a_hdr->ar_tip = dst_ip;
 
     /* send! */
