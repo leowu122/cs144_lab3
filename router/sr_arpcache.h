@@ -139,7 +139,8 @@ void sr_arpreq_destroy(struct sr_arpcache *cache, struct sr_arpreq *entry);
 void sr_arpcache_dump(struct sr_arpcache *cache);
 
 /* The required handle_arpreq() */
-void handle_arpreq(struct sr_arpreq *req);
+void handle_arpreq(struct sr_instance *sr, struct sr_arpreq *req, struct sr_if *iface);
+void send_arp_pkt(struct sr_instance *sr, uint32_t dst_ip, struct sr_if *iface);
 
 /* You shouldn't have to call these methods--they're already called in the
    starter code for you. The init call is a constructor, the destroy call is

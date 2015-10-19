@@ -269,8 +269,9 @@ void forward_ip_packet(struct sr_instance *sr, uint8_t *packet, unsigned int len
     /* There is no cached ARP entry, so we need to send an ARP request and add this packet to the queue. */
     arp_req = sr_arpcache_queuereq(&sr->cache, routing_entry->gw.s_addr, forward_packet, len, routing_entry->interface);
 
-    /* TODO: Sukwon - this is a transition to the ARP request part. Please see the pseuo-code at the beginning of sr_arpcache.h */
-    handle_arpreq(arp_req);
+    /* TODO: Sukwon - this is a transition to the ARP request part.
+     * Please see the pseuo-code at the beginning of sr_arpcache.h */
+    handle_arpreq(sr, arp_req, outgoing_interface);
   }
 
   free(forward_packet);
@@ -423,8 +424,9 @@ void handle_arp_packet(struct sr_instance* sr, uint8_t *packet, unsigned int len
   e_hdr = (struct sr_ethernet_hdr*)packet;
   a_hdr = (struct sr_arp_hdr*)(packet + sizeof(struct sr_ethernet_hdr));
 
-  if ( (e_hdr->ether_type == htons(ethertype_arp)) &&
-       (a_hdr->ar_op == htons(arp_op_request)) ) {
+  assert(e_hdr->ether_type == htons(ethertype_arp));
+
+  if (a_hdr->ar_op == htons(arp_op_request)) {
     /* construct ARP reply and send */
     struct sr_ethernet_hdr* new_e_hdr = 0;
     struct sr_arp_hdr* new_a_hdr = 0;
@@ -437,8 +439,8 @@ void handle_arp_packet(struct sr_instance* sr, uint8_t *packet, unsigned int len
     new_e_hdr = (struct sr_ethernet_hdr*)new_pkt;
     new_a_hdr = (struct sr_arp_hdr*)(new_pkt + sizeof(struct sr_ethernet_hdr));
     /* setup ethernet header */
-    memcpy(new_e_hdr->ether_dhost, a_hdr->ar_sha, ETHER_ADDR_LEN);
     memcpy(new_e_hdr->ether_shost, iface->addr, ETHER_ADDR_LEN);
+    memcpy(new_e_hdr->ether_dhost, a_hdr->ar_sha, ETHER_ADDR_LEN);
     new_e_hdr->ether_type = htons(ethertype_arp);
     /* setup arp header */
     new_a_hdr->ar_op = htons(arp_op_reply);
@@ -453,5 +455,42 @@ void handle_arp_packet(struct sr_instance* sr, uint8_t *packet, unsigned int len
       fprintf(stderr, "Error sending ARP reply\n");
       return;
     }
+  } else if (a_hdr->ar_op == htons(arp_op_reply)) {
+    /**
+     * The ARP reply processing code should move entries from the ARP request
+     * queue to the ARP cache:
+     *
+     * # When servicing an arp reply that gives us an IP->MAC mapping
+     * req = arpcache_insert(ip, mac)
+     * if req:
+     *   send all packets on the req->packets linked list
+     *   arpreq_destroy(req)
+     */
+    struct sr_arpreq *arp_req = sr_arpcache_insert(&(sr->cache),
+                                                   iface->addr,
+                                                   a_hdr->ar_sip);
+    if (arp_req) {
+      struct sr_packet *pkt = arp_req->packets;
+      struct sr_ethernet_hdr* new_e_hdr = 0;
+      struct sr_arp_hdr* new_a_hdr = 0;
+
+      while (pkt) {
+        /* Update src/dst MAC addresses for the pending packet */
+        new_e_hdr = (struct sr_ethernet_hdr*)pkt->buf;
+        new_a_hdr = (struct sr_arp_hdr*)(pkt->buf + sizeof(struct sr_ethernet_hdr));
+        memcpy(new_e_hdr->ether_shost, iface->addr, ETHER_ADDR_LEN);
+        memcpy(new_e_hdr->ether_dhost, e_hdr->ether_shost, ETHER_ADDR_LEN);
+
+        int res = sr_send_packet(sr, pkt->buf, pkt->len, pkt->iface);
+        if (res != 0) {
+          fprintf(stderr, "Error sending a packet\n");
+          return;
+        }
+        pkt = pkt->next;
+      }
+      sr_arpreq_destroy(&(sr->cache), arp_req);
+    }
+  } else {
+    fprintf(stderr, "Unsupported arp packet: %d\n", a_hdr->ar_op);
   }
 }

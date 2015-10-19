@@ -247,5 +247,68 @@ void *sr_arpcache_timeout(void *sr_ptr) {
     return NULL;
 }
 
-void handle_arpreq(struct sr_arpreq *req) {
+/**
+ * Broadcasts a ARP request and waits for a ARP reply.
+ */
+void handle_arpreq(struct sr_instance *sr, struct sr_arpreq *req, struct sr_if *iface) {
+    time_t curtime = time(NULL);
+    if (difftime(curtime, req->sent) > 1.0) {
+        if (req->times_sent >= 5) {
+            /* TODO: Leo */
+            /* send_icmp_packet(...); */
+            sr_arpreq_destroy(&(sr->cache), req);
+        } else {
+            send_arp_pkt(sr, req->ip, iface);
+            req->sent = curtime;
+            req->times_sent++;
+        }
+    }
+}
+
+/**
+ * Sends a ARP packet.
+ */
+void send_arp_pkt(struct sr_instance *sr, uint32_t dst_ip, struct sr_if *iface) {
+    /* construct ARP reply and send */
+    struct sr_ethernet_hdr* new_e_hdr = 0;
+    struct sr_arp_hdr* new_a_hdr = 0;
+    unsigned int len = sizeof(struct sr_ethernet_hdr) +
+                       sizeof(struct sr_arp_hdr);
+    uint8_t *new_pkt = (uint8_t *)malloc(len);
+    if (!new_pkt) {
+      perror("malloc failed");
+      return;
+    }
+    memset(new_pkt, 0, len);
+    new_e_hdr = (struct sr_ethernet_hdr*)new_pkt;
+    new_a_hdr = (struct sr_arp_hdr*)(new_pkt + sizeof(struct sr_ethernet_hdr));
+
+    uint8_t broadcast_addr[ETHER_ADDR_LEN];
+    int i;
+    for (i = 0; i < ETHER_ADDR_LEN; i++) {
+      broadcast_addr[i] = 0xff;
+    }
+
+    /* setup ethernet header */
+    memcpy(new_e_hdr->ether_shost, iface->addr, ETHER_ADDR_LEN);
+    memcpy(new_e_hdr->ether_dhost, broadcast_addr, ETHER_ADDR_LEN);
+    new_e_hdr->ether_type = htons(ethertype_arp);
+
+    /* setup arp header */
+    new_a_hdr->ar_hrd = htons(arp_hrd_ethernet);
+    new_a_hdr->ar_pro = htons(ethertype_ip);
+    new_a_hdr->ar_hln = ETHER_ADDR_LEN;
+    new_a_hdr->ar_pln = 4;
+    new_a_hdr->ar_op = htons(arp_op_request);
+    memcpy(new_a_hdr->ar_sha, iface->addr, ETHER_ADDR_LEN);
+    new_a_hdr->ar_sip = iface->ip;
+    /*memcpy(new_a_hdr->ar_tha, broadcast_addr, ETHER_ADDR_LEN);*/
+    new_a_hdr->ar_tip = dst_ip;
+
+    /* send! */
+    int res = sr_send_packet(sr, new_pkt, len, iface->name);
+    if (res != 0) {
+      fprintf(stderr, "Error sending ARP reply\n");
+    }
+    free(new_pkt);
 }
