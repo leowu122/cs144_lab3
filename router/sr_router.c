@@ -366,13 +366,13 @@ int is_icmp_packet_valid(struct sr_instance* sr, uint8_t *packet, unsigned int l
 		}
 		
 		/* check echo request*/
-		if (icmp_hdr->icmp_type != ICMP_ECHO_REQUEST)
+		if (icmp_hdr->icmp_type != icmp_type_0)
 		{
 			fprintf(stderr, "Invalid ICMP header, not echo request\n");
 			return 0;
 		}
 		/* check echo reply*/
-		if (icmp_hdr->icmp_code != ICMP_ECHO_REPLY)
+		if (icmp_hdr->icmp_code != icmp_code_0)
 		{
 			fprintf(stderr, "Invalid ICMP header, not echo reply\n");
 			return 0;
@@ -408,8 +408,8 @@ void send_icmp_packet(enum sr_icmp_type icmp_type, enum sr_icmp_code icmp_code, 
 	
 	/* outgoing interface */
 	outgoing_interface = sr_get_interface(sr, rt->interface); 
-	
-	if (icmp_type == icmp_type_echo_reply) {
+	/* icmp type 0 echo reply */
+	if (icmp_type == icmp_type_0) {
 				
 		/* Update the ip header fields. */ 
 		dst = ip_hdr->ip_src;
@@ -425,7 +425,7 @@ void send_icmp_packet(enum sr_icmp_type icmp_type, enum sr_icmp_code icmp_code, 
 		sr_icmp_send(sr, packet, len, outgoing_interface, rt->gw.s_addr);
 	
 	/* unreachable type 3 */
-	} else if (icmp_type == icmp_type_unreachable) {	
+	} else if (icmp_type == icmp_type_3) {	
 		unsigned int new_len = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t);
 		uint8_t *buf = (uint8_t *)malloc(new_len);
 		
@@ -444,7 +444,7 @@ void send_icmp_packet(enum sr_icmp_type icmp_type, enum sr_icmp_code icmp_code, 
         new_ip_hdr->ip_p = ip_protocol_icmp;
 		
 		/* port unreachable code 1 */
-		if (icmp_code == icmp_code_unreachable_port) {
+		if (icmp_code == icmp_code_1) {
 			new_ip_hdr->ip_src = ip_hdr->ip_dst;
 		} else {
 			/* update the source ip to the ip of the outgoing interface*/
