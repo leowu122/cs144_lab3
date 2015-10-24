@@ -33,8 +33,6 @@ int should_forward_ip_packet(struct sr_instance *sr, sr_ip_hdr_t *ip_header);
 void forward_ip_packet(struct sr_instance *sr, uint8_t *packet, unsigned int len, struct sr_rt *routing_entry);
 void handle_ip_packet(struct sr_instance *sr, uint8_t *packet, unsigned int len, char *interface);
 void handle_arp_packet(struct sr_instance* sr, uint8_t *packet, unsigned int len, char *interface);
-void send_icmp_packet(enum sr_icmp_type type, enum sr_icmp_code code,
-        struct sr_instance *sr, uint8_t *packet, unsigned int len, char *interface);
 					
 /*---------------------------------------------------------------------
  * Method: sr_init(void)
@@ -271,10 +269,7 @@ void forward_ip_packet(struct sr_instance *sr, uint8_t *packet, unsigned int len
   } else {
     /* There is no cached ARP entry, so we need to send an ARP request and add this packet to the queue. */
     arp_req = sr_arpcache_queuereq(&sr->cache, routing_entry->gw.s_addr, forward_packet, len, routing_entry->interface);
-
-    /* TODO: Sukwon - this is a transition to the ARP request part.
-     * Please see the pseuo-code at the beginning of sr_arpcache.h */
-    handle_arpreq(sr, arp_req, outgoing_interface);
+    handle_arpreq(sr, arp_req);
   }
 
   free(forward_packet);
@@ -439,9 +434,6 @@ void send_icmp_packet(enum sr_icmp_type type, enum sr_icmp_code code,
             return;
         }
         free(new_pkt);
-
-    } else if (type == icmp_type_1) {
-        fprintf(stderr, "ICMP Type 1 Not Implemented!\n");
     } else if (type == icmp_type_3) {
         /* ICMP type 3 messages */
         struct sr_if* iface = sr_get_interface(sr, interface);

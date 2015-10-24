@@ -15,11 +15,19 @@
   This function gets called every second. For each request sent out, we keep
   checking whether we should resend an request or destroy the arp request.
   See the comments in the header file for an idea of what it should look like.
-
-  TODO: Sukwon
 */
-void sr_arpcache_sweepreqs(struct sr_instance *sr) { 
-    /* Fill this in */
+void sr_arpcache_sweepreqs(struct sr_instance *sr) {
+    struct sr_arpreq *cur_req;
+    struct sr_arpreq *next;
+
+    cur_req = sr->cache.requests;
+    while (cur_req) {
+        /* handle_arpreq() could destroy the current request, so we need to save the
+           next pointer before calling handle_arpreq() */
+        next = cur_req->next;
+        handle_arpreq(sr, cur_req);
+        cur_req = next;
+    }
 }
 
 /* You should not need to touch the rest of this code. */
@@ -250,15 +258,24 @@ void *sr_arpcache_timeout(void *sr_ptr) {
 /**
  * Broadcasts a ARP request and waits for a ARP reply.
  */
-void handle_arpreq(struct sr_instance *sr, struct sr_arpreq *req, struct sr_if *iface) {
+void handle_arpreq(struct sr_instance *sr, struct sr_arpreq *req) {
+    struct sr_packet *cur_packet;
+
     time_t curtime = time(NULL);
     if (difftime(curtime, req->sent) > 1.0) {
         if (req->times_sent >= 5) {
             /* TODO: Leo */
-            /* send_icmp_packet(...); */
+//            cur_packet = req->packets;
+//
+//            /* Send destination host unreachable to all packets waiting on this ARP */
+//            while (cur_packet) {
+//                send_icmp_packet(icmp_type_3, icmp_code_1, sr, cur_packet->buf, cur_packet->len, TODO: interface);
+//                cur_packet = cur_packet->next;
+//            }
+
             sr_arpreq_destroy(&(sr->cache), req);
         } else {
-            send_arp_pkt(sr, req->ip, iface);
+            send_arp_pkt(sr, req);
             req->sent = curtime;
             req->times_sent++;
         }
@@ -268,7 +285,10 @@ void handle_arpreq(struct sr_instance *sr, struct sr_arpreq *req, struct sr_if *
 /**
  * Sends a ARP packet.
  */
-void send_arp_pkt(struct sr_instance *sr, uint32_t dst_ip, struct sr_if *iface) {
+void send_arp_pkt(struct sr_instance *sr, struct sr_arpreq *req) {
+    /* Get outgoing interface */
+    struct sr_if *iface = sr_get_interface(sr, req->packets->iface);
+
     /* construct ARP reply and send */
     struct sr_ethernet_hdr* new_e_hdr = 0;
     struct sr_arp_hdr* new_a_hdr = 0;
@@ -303,7 +323,7 @@ void send_arp_pkt(struct sr_instance *sr, uint32_t dst_ip, struct sr_if *iface) 
     memcpy(new_a_hdr->ar_sha, iface->addr, ETHER_ADDR_LEN);
     new_a_hdr->ar_sip = iface->ip;
     memcpy(new_a_hdr->ar_tha, broadcast_addr, ETHER_ADDR_LEN);
-    new_a_hdr->ar_tip = dst_ip;
+    new_a_hdr->ar_tip = req->ip;
 
     /* send! */
     int res = sr_send_packet(sr, new_pkt, len, iface->name);

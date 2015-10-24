@@ -167,7 +167,6 @@ enum sr_icmp_code {
 
 enum sr_icmp_type {
     icmp_type_0,
-    icmp_type_1,
     icmp_type_3 = 3,
     icmp_type_11 = 11
 };
