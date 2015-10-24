@@ -307,8 +307,10 @@ void handle_ip_packet(struct sr_instance *sr, uint8_t *packet, unsigned int len,
     }
 
     ip_header->ip_ttl--;
-    if (ip_header->ip_ttl <= 0) {
+    assert(ip_header->ip_ttl >= 0); /* ip_ttl is unsigned */
+    if (ip_header->ip_ttl == 0) {
       /* Send ICMP time exceeded */
+      printf("Sending ICMP 11!\n");
       send_icmp_packet(icmp_type_11, icmp_code_0, sr, packet, len, interface);
       return;
     }
@@ -323,6 +325,7 @@ void handle_ip_packet(struct sr_instance *sr, uint8_t *packet, unsigned int len,
       send_icmp_packet(icmp_type_0, icmp_code_0, sr, packet, len, interface);
     } else {
       /* The packet contains a TCP or UDP payload, so send ICMP port unreachable to the sender */
+      printf("Sending ICMP 3!\n");
       send_icmp_packet(icmp_type_3, icmp_code_3, sr, packet, len, interface);
     }
   }
@@ -430,9 +433,6 @@ void send_icmp_packet(enum sr_icmp_type type, enum sr_icmp_code code,
         memcpy(&e_hdr->ether_shost[0], &e_hdr->ether_dhost[0], ETHER_ADDR_LEN);
         memcpy(&e_hdr->ether_dhost[0], &mac_shost[0], ETHER_ADDR_LEN);
 
-        printf("Before sending ICMP 0!\n");
-        print_hdrs(new_pkt, len);
-
         int res = sr_send_packet(sr, new_pkt, len, interface);
         if (res != 0) {
             fprintf(stderr, "Error sending ICMP Echo Reply\n");
@@ -443,9 +443,108 @@ void send_icmp_packet(enum sr_icmp_type type, enum sr_icmp_code code,
     } else if (type == icmp_type_1) {
         fprintf(stderr, "ICMP Type 1 Not Implemented!\n");
     } else if (type == icmp_type_3) {
-        fprintf(stderr, "ICMP Type 3 Not Implemented!\n");
+        /* ICMP type 3 messages */
+        struct sr_if* iface = sr_get_interface(sr, interface);
+        unsigned int newlen = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t);
+        uint8_t *new_pkt = (uint8_t *)malloc(newlen);
+        if (!new_pkt) {
+            perror("malloc failed");
+            return;
+        }
+        /* must be careful about pointer arithematic! */
+        sr_ethernet_hdr_t *e_orig_hdr = (sr_ethernet_hdr_t *)packet;
+        sr_ip_hdr_t *ip_orig_hdr = (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
+
+        sr_ethernet_hdr_t *e_hdr = (sr_ethernet_hdr_t *)new_pkt;
+        sr_ip_hdr_t *ip_hdr = (sr_ip_hdr_t *)(new_pkt + sizeof(sr_ethernet_hdr_t));
+        sr_icmp_t3_hdr_t *icmp_hdr = (sr_icmp_t3_hdr_t *)(new_pkt + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t)); 
+
+        /* setup ICMP */
+        icmp_hdr->icmp_type = icmp_type_3;
+        icmp_hdr->icmp_code = code;
+        icmp_hdr->unused = 0;
+        icmp_hdr->next_mtu = 0;
+        memcpy(&icmp_hdr->data[0], ip_orig_hdr, ICMP_DATA_SIZE);
+        icmp_hdr->icmp_sum = 0;
+        icmp_hdr->icmp_sum = cksum(icmp_hdr, sizeof(sr_icmp_t3_hdr_t));
+
+        /* setup IP */
+        memcpy(ip_hdr, ip_orig_hdr, sizeof(sr_ip_hdr_t));
+        ip_hdr->ip_tos = 0;
+        ip_hdr->ip_p = ip_protocol_icmp;
+        ip_hdr->ip_ttl = 64;    /* FIXME(soh): is this enough? */
+        ip_hdr->ip_len = htons(sizeof(sr_icmp_t3_hdr_t));
+        ip_hdr->ip_src = iface->ip;             /* update ip to current interface's */
+        ip_hdr->ip_src = ip_orig_hdr->ip_dst;
+        ip_hdr->ip_dst = ip_orig_hdr->ip_src;
+        ip_hdr->ip_sum = 0;
+        ip_hdr->ip_sum = cksum(ip_hdr, get_ip_ihl_bytes(ip_hdr));
+
+        /* setup Ethernet */
+        memcpy(&e_hdr->ether_shost[0], &e_orig_hdr->ether_dhost[0], ETHER_ADDR_LEN);
+        memcpy(&e_hdr->ether_dhost[0], &e_orig_hdr->ether_shost[0], ETHER_ADDR_LEN);
+        e_hdr->ether_type = htons(ethertype_ip);
+
+        printf("Before sending ICMP 3!\n");
+        print_hdrs(new_pkt, newlen);
+
+        int res = sr_send_packet(sr, new_pkt, newlen, interface);
+        if (res != 0) {
+            fprintf(stderr, "Error sending ICMP Type 3\n");
+            return;
+        }
+        free(new_pkt);
+
     } else if (type == icmp_type_11) {
-        fprintf(stderr, "ICMP Type 11 Not Implemented!\n");
+        /* ICMP type 11 messages */
+        struct sr_if* iface = sr_get_interface(sr, interface);
+        unsigned int newlen = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t11_hdr_t);
+        uint8_t *new_pkt = (uint8_t *)malloc(newlen);
+        if (!new_pkt) {
+            perror("malloc failed");
+            return;
+        }
+        /* must be careful about pointer arithematic! */
+        sr_ethernet_hdr_t *e_orig_hdr = (sr_ethernet_hdr_t *)packet;
+        sr_ip_hdr_t *ip_orig_hdr = (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
+        sr_ethernet_hdr_t *e_hdr = (sr_ethernet_hdr_t *)new_pkt;
+        sr_ip_hdr_t *ip_hdr = (sr_ip_hdr_t *)(new_pkt + sizeof(sr_ethernet_hdr_t));
+        sr_icmp_t11_hdr_t *icmp_hdr = (sr_icmp_t11_hdr_t *)(new_pkt + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t)); 
+
+        /* setup ICMP */
+        icmp_hdr->icmp_type = icmp_type_11;
+        icmp_hdr->icmp_code = 0;
+        icmp_hdr->unused = 0;
+        memcpy(icmp_hdr->data, ip_orig_hdr, ICMP_DATA_SIZE);
+        icmp_hdr->icmp_sum = 0;
+        icmp_hdr->icmp_sum = cksum(icmp_hdr, sizeof(sr_icmp_t11_hdr_t));
+
+        /* setup IP */
+        memcpy(ip_hdr, ip_orig_hdr, sizeof(sr_ip_hdr_t));
+        ip_hdr->ip_tos = 0;
+        ip_hdr->ip_p = ip_protocol_icmp;
+        ip_hdr->ip_ttl = 64;    /* FIXME(soh): is this enough? */
+        ip_hdr->ip_len = htons(sizeof(sr_icmp_t11_hdr_t));
+        ip_hdr->ip_src = iface->ip;             /* update ip to current interface's */
+        ip_hdr->ip_dst = ip_orig_hdr->ip_src;
+        ip_hdr->ip_sum = 0;
+        ip_hdr->ip_sum = cksum(ip_hdr, get_ip_ihl_bytes(ip_hdr));
+
+        /* setup Ethernet */
+        memcpy(&e_hdr->ether_shost[0], &e_orig_hdr->ether_dhost[0], ETHER_ADDR_LEN);
+        memcpy(&e_hdr->ether_dhost[0], &e_orig_hdr->ether_shost[0], ETHER_ADDR_LEN);
+        e_hdr->ether_type = htons(ethertype_ip);
+
+        printf("Before sending ICMP 11!\n");
+        print_hdrs(new_pkt, newlen);
+
+        int res = sr_send_packet(sr, new_pkt, newlen, interface);
+        if (res != 0) {
+            fprintf(stderr, "Error sending ICMP Type 11\n");
+            return;
+        }
+        free(new_pkt);
+
     } else {
         fprintf(stderr, "Unknown ICMP type: %d\n", type);
     }
