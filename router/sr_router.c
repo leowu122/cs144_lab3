@@ -465,7 +465,7 @@ void send_icmp_packet(enum sr_icmp_type type, enum sr_icmp_code code,
         ip_hdr->ip_tos = 0;
         ip_hdr->ip_p = ip_protocol_icmp;
         ip_hdr->ip_ttl = 64;    /* FIXME(soh): is this enough? */
-        ip_hdr->ip_len = htons(sizeof(sr_icmp_t3_hdr_t));
+        ip_hdr->ip_len = htons(sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t));
         ip_hdr->ip_src = iface->ip;             /* update ip to current interface's */
         ip_hdr->ip_src = ip_orig_hdr->ip_dst;
         ip_hdr->ip_dst = ip_orig_hdr->ip_src;
@@ -499,6 +499,7 @@ void send_icmp_packet(enum sr_icmp_type type, enum sr_icmp_code code,
         /* must be careful about pointer arithematic! */
         sr_ethernet_hdr_t *e_orig_hdr = (sr_ethernet_hdr_t *)packet;
         sr_ip_hdr_t *ip_orig_hdr = (sr_ip_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
+
         sr_ethernet_hdr_t *e_hdr = (sr_ethernet_hdr_t *)new_pkt;
         sr_ip_hdr_t *ip_hdr = (sr_ip_hdr_t *)(new_pkt + sizeof(sr_ethernet_hdr_t));
         sr_icmp_t11_hdr_t *icmp_hdr = (sr_icmp_t11_hdr_t *)(new_pkt + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t)); 
@@ -516,7 +517,7 @@ void send_icmp_packet(enum sr_icmp_type type, enum sr_icmp_code code,
         ip_hdr->ip_tos = 0;
         ip_hdr->ip_p = ip_protocol_icmp;
         ip_hdr->ip_ttl = 64;    /* FIXME(soh): is this enough? */
-        ip_hdr->ip_len = htons(sizeof(sr_icmp_t11_hdr_t));
+        ip_hdr->ip_len = htons(sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t11_hdr_t));
         ip_hdr->ip_src = iface->ip;             /* update ip to current interface's */
         ip_hdr->ip_dst = ip_orig_hdr->ip_src;
         ip_hdr->ip_sum = 0;
