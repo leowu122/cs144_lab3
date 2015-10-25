@@ -94,8 +94,6 @@ void sr_handlepacket(struct sr_instance* sr,
 
   /* fill in code here */
 
-  print_hdrs(packet, len);
-
   pkttype = ethertype(packet);
   if (pkttype == ethertype_ip) {
     handle_ip_packet(sr, packet, len, interface);
@@ -305,7 +303,6 @@ void handle_ip_packet(struct sr_instance *sr, uint8_t *packet, unsigned int len,
     assert(ip_header->ip_ttl >= 0); /* ip_ttl is unsigned */
     if (ip_header->ip_ttl == 0) {
       /* Send ICMP time exceeded */
-      printf("Sending ICMP 11!\n");
       send_icmp_packet(icmp_type_11, icmp_code_0, sr, packet, len, interface);
       return;
     }
@@ -320,7 +317,6 @@ void handle_ip_packet(struct sr_instance *sr, uint8_t *packet, unsigned int len,
       send_icmp_packet(icmp_type_0, icmp_code_0, sr, packet, len, interface);
     } else {
       /* The packet contains a TCP or UDP payload, so send ICMP port unreachable to the sender */
-      printf("Sending ICMP 3!\n");
       send_icmp_packet(icmp_type_3, icmp_code_3, sr, packet, len, interface);
     }
   }
@@ -467,7 +463,6 @@ void send_icmp_packet(enum sr_icmp_type type, enum sr_icmp_code code,
         ip_hdr->ip_ttl = 64;    /* FIXME(soh): is this enough? */
         ip_hdr->ip_len = htons(sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t));
         ip_hdr->ip_src = iface->ip;             /* update ip to current interface's */
-        ip_hdr->ip_src = ip_orig_hdr->ip_dst;
         ip_hdr->ip_dst = ip_orig_hdr->ip_src;
         ip_hdr->ip_sum = 0;
         ip_hdr->ip_sum = cksum(ip_hdr, get_ip_ihl_bytes(ip_hdr));
@@ -476,9 +471,6 @@ void send_icmp_packet(enum sr_icmp_type type, enum sr_icmp_code code,
         memcpy(&e_hdr->ether_shost[0], &e_orig_hdr->ether_dhost[0], ETHER_ADDR_LEN);
         memcpy(&e_hdr->ether_dhost[0], &e_orig_hdr->ether_shost[0], ETHER_ADDR_LEN);
         e_hdr->ether_type = htons(ethertype_ip);
-
-        printf("Before sending ICMP 3!\n");
-        print_hdrs(new_pkt, newlen);
 
         int res = sr_send_packet(sr, new_pkt, newlen, interface);
         if (res != 0) {
@@ -527,9 +519,6 @@ void send_icmp_packet(enum sr_icmp_type type, enum sr_icmp_code code,
         memcpy(&e_hdr->ether_shost[0], &e_orig_hdr->ether_dhost[0], ETHER_ADDR_LEN);
         memcpy(&e_hdr->ether_dhost[0], &e_orig_hdr->ether_shost[0], ETHER_ADDR_LEN);
         e_hdr->ether_type = htons(ethertype_ip);
-
-        printf("Before sending ICMP 11!\n");
-        print_hdrs(new_pkt, newlen);
 
         int res = sr_send_packet(sr, new_pkt, newlen, interface);
         if (res != 0) {
