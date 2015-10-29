@@ -91,6 +91,7 @@ void sr_handlepacket(struct sr_instance* sr,
   assert(interface);
 
   printf("*** -> Received packet of length %d \n",len);
+  print_hdrs(packet, len);
 
   /* fill in code here */
 
@@ -532,6 +533,14 @@ void send_icmp_packet(enum sr_icmp_type type, enum sr_icmp_code code,
     }
 }
 
+int is_arp_packet_valid(uint8_t *packet, unsigned int len) {
+  /* TODO: perhaps move this to is_arp_packet_valid()? */
+  if (len < sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t) ) {
+    return -1;
+  }
+  return 0;
+}
+
 /**
  * TODO: Sukwon
  *
@@ -542,34 +551,43 @@ void send_icmp_packet(enum sr_icmp_type type, enum sr_icmp_code code,
  *    it needs to send an ARP request first to learn the target MAC address.
  */
 void handle_arp_packet(struct sr_instance* sr, uint8_t *packet, unsigned int len, char *interface) {
+  if (is_arp_packet_valid(packet, len) != 0) {
+    fprintf(stderr, "Invalid ARP packet of len: %d\n", len);
+    return;
+  }
+
   struct sr_if* iface = sr_get_interface(sr, interface);
-  /* TODO: Why not use the typedef sr_ethernet_hdr_t and sr_arp_hdr_t? */
-  struct sr_ethernet_hdr* e_hdr = 0;
-  struct sr_arp_hdr*       a_hdr = 0;
+  if (!iface) {
+    fprintf(stderr, "Could not get interface: %s\n", interface);
+    return;
+  }
 
-  /* TODO: perhaps move this to is_arp_packet_valid()? */
-  if (len < sizeof(struct sr_ethernet_hdr) + sizeof(struct sr_arp_hdr) )
-  { return; }
+  sr_ethernet_hdr_t *e_hdr = (sr_ethernet_hdr_t*)packet;
+  sr_arp_hdr_t *a_hdr = (sr_arp_hdr_t*)(packet + sizeof(sr_ethernet_hdr_t));
 
-  assert(iface);
+  if (ntohs(e_hdr->ether_type) != ethertype_arp) {
+    fprintf(stderr, "Invalid ether_type: %d\n", ntohs(e_hdr->ether_type));
+    return;
+  }
 
-  e_hdr = (struct sr_ethernet_hdr*)packet;
-  a_hdr = (struct sr_arp_hdr*)(packet + sizeof(struct sr_ethernet_hdr));
+  unsigned short arp_op = ntohs(a_hdr->ar_op);
+  if (arp_op == arp_op_request) {
+    /**
+     * Packet's target IP address must match the router interface's IP.
+     * If not, drop it.
+     */
+    if (a_hdr->ar_tip != iface->ip) {
+      return;
+    }
 
-  assert(e_hdr->ether_type == htons(ethertype_arp));
-
-  if (a_hdr->ar_op == htons(arp_op_request)) {
-    /* construct ARP reply and send */
-    struct sr_ethernet_hdr* new_e_hdr = 0;
-    struct sr_arp_hdr* new_a_hdr = 0;
     uint8_t *new_pkt = (uint8_t *)malloc(len);
     if (!new_pkt) {
-      perror("malloc failed");
+      fprintf(stderr, "malloc() failed!\n");
       return;
     }
     memcpy(new_pkt, packet, len);
-    new_e_hdr = (struct sr_ethernet_hdr*)new_pkt;
-    new_a_hdr = (struct sr_arp_hdr*)(new_pkt + sizeof(struct sr_ethernet_hdr));
+    sr_ethernet_hdr_t *new_e_hdr = (sr_ethernet_hdr_t*)new_pkt;
+    sr_arp_hdr_t *new_a_hdr = (sr_arp_hdr_t*)(new_pkt + sizeof(sr_ethernet_hdr_t));
     /* setup ethernet header */
     memcpy(new_e_hdr->ether_shost, iface->addr, ETHER_ADDR_LEN);
     memcpy(new_e_hdr->ether_dhost, a_hdr->ar_sha, ETHER_ADDR_LEN);
@@ -587,7 +605,8 @@ void handle_arp_packet(struct sr_instance* sr, uint8_t *packet, unsigned int len
       fprintf(stderr, "Error sending ARP reply\n");
       return;
     }
-  } else if (a_hdr->ar_op == htons(arp_op_reply)) {
+    free(new_pkt);
+  } else if (arp_op == arp_op_reply) {
     /**
      * The ARP reply processing code should move entries from the ARP request
      * queue to the ARP cache:
@@ -623,6 +642,6 @@ void handle_arp_packet(struct sr_instance* sr, uint8_t *packet, unsigned int len
       sr_arpreq_destroy(&(sr->cache), arp_req);
     }
   } else {
-    fprintf(stderr, "Unsupported arp packet: %d\n", a_hdr->ar_op);
+    fprintf(stderr, "Unsupported arp packet: %d\n", arp_op);
   }
 }
