@@ -329,26 +329,18 @@ void handle_ip_packet(struct sr_instance *sr, uint8_t *packet, unsigned int len,
 int is_icmp_packet_valid(struct sr_instance* sr, uint8_t *packet, unsigned int len)
 {
 #if 0
-       unsigned int minlength = 0;
-
-       assert(sr);
-       assert(packet);
-
-       minlength += sizeof(sr_icmp_hdr_t);
 
        /* check the length*/
-      if (len < minlength)
+      if (len < sizeof(sr_icmp_hdr_t))
        {
                fprintf(stderr, "Invalid ICMP header, insufficient length\n");
                return 0;
        }
-       else
-       {
-               sr_icmp_hdr_t *icmp_hdr = (sr_icmp_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
-               uint16_t received_cksum = icmp_hdr->icmp_sum;
-               icmp_hdr->icmp_sum = 0;
+       sr_icmp_hdr_t *icmp_hdr = (sr_icmp_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+       uint16_t received_cksum = icmp_hdr->icmp_sum;
+       icmp_hdr->icmp_sum = 0;
 
-               uint16_t expected_cksum = cksum(icmp_hdr, ntohs(ip_hdr->ip_len) - (ip_hdr->ip_hl * 4));
+       uint16_t expected_cksum = cksum(icmp_hdr, sizeof(sr_icmp_hdr_t));
 
                /* check the checksum*/
                if (expected_cksum != received_cksum)
