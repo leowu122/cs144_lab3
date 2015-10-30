@@ -321,7 +321,7 @@ void handle_ip_packet(struct sr_instance *sr, uint8_t *packet, unsigned int len,
 }
 
 /**
- * Validates the ICMP packet (minimum length, checksum, etc.). Returns 1 if the packet is valid, and 0 otherwise.
+ * Validates the ICMP packet. Returns 1 if the packet is valid, and 0 otherwise.
  * Use this before sending the ICMP packet in send_icmp_packet().
  */
 int is_icmp_packet_valid(struct sr_instance* sr, uint8_t *packet, unsigned int len)
@@ -329,29 +329,6 @@ int is_icmp_packet_valid(struct sr_instance* sr, uint8_t *packet, unsigned int l
 	/* check the length*/
 	if (len < sizeof(sr_icmp_hdr_t)) {
 		fprintf(stderr, "Invalid ICMP header, insufficient length\n");
-		return 0;
-	}
-	
-	sr_icmp_hdr_t *icmp_hdr = (sr_icmp_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
-	uint16_t received_cksum = icmp_hdr->icmp_sum;
-	icmp_hdr->icmp_sum = 0;
-	uint16_t expected_cksum = cksum(icmp_hdr, sizeof(sr_icmp_hdr_t));
-	
-	/* check the checksum*/
-	if (expected_cksum != received_cksum){
-		fprintf(stderr, "Invalid ICMP header, insufficient checksum\n");
-		return 0;
-	}
-	
-	/* check echo request*/
-	if (icmp_hdr->icmp_type != icmp_type_0) {
-		fprintf(stderr, "Invalid ICMP header, not echo request\n");
-		return 0;
-	}
-	
-	/* check echo reply*/
-	if (icmp_hdr->icmp_code != icmp_code_0) {
-		fprintf(stderr, "Invalid ICMP header, not echo reply\n");
 		return 0;
 	}
 	
@@ -585,25 +562,25 @@ void send_icmp_packet(enum sr_icmp_type type, enum sr_icmp_code code,
     }
 }
 
+/**
+ * Check if ARP packet is valid. Returns 1 if valid, and 0 otherwise.
+ */
 int is_arp_packet_valid(uint8_t *packet, unsigned int len) {
-  /* TODO: perhaps move this to is_arp_packet_valid()? */
   if (len < sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t) ) {
-    return -1;
+    return 0;
   }
-  return 0;
+  return 1;
 }
 
 /**
- * TODO: Sukwon
- *
- * soh: handles ARP requests.
+ * Handles ARP requests.
  * 1. when the router receives an ARP request, it needs to check target IP
  *    with its own and decide whether to send ARP reply or ignore it.
  * 2. when the router forwards a packet, if the target MAC address is not known,
  *    it needs to send an ARP request first to learn the target MAC address.
  */
 void handle_arp_packet(struct sr_instance* sr, uint8_t *packet, unsigned int len, char *interface) {
-  if (is_arp_packet_valid(packet, len) != 0) {
+  if (!is_arp_packet_valid(packet, len)) {
     fprintf(stderr, "Invalid ARP packet of len: %d\n", len);
     return;
   }
