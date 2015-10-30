@@ -393,6 +393,12 @@ int is_icmp_packet_valid(struct sr_instance* sr, uint8_t *packet, unsigned int l
 void send_icmp_packet(enum sr_icmp_type type, enum sr_icmp_code code,
         struct sr_instance *sr, uint8_t *packet, unsigned int len, char *interface) {
 
+    struct sr_if *iface = sr_get_interface(sr, interface);
+    if (!iface) {
+      fprintf(stderr, "Could not get interface!\n");
+      return;
+    }
+
     if (type == icmp_type_0) {
         /* ICMP echo request and echo reply seems to use same header */
         uint8_t *new_pkt = (uint8_t *)malloc(len);
@@ -414,6 +420,7 @@ void send_icmp_packet(enum sr_icmp_type type, enum sr_icmp_code code,
 
         /* setup IP */
         uint32_t ip_src = ip_hdr->ip_src;
+        uint32_t ip_dst = ip_hdr->ip_dst;
         ip_hdr->ip_src = ip_hdr->ip_dst;
         ip_hdr->ip_dst = ip_src;
         ip_hdr->ip_ttl = INIT_TTL;
@@ -426,15 +433,30 @@ void send_icmp_packet(enum sr_icmp_type type, enum sr_icmp_code code,
         memcpy(&e_hdr->ether_shost[0], &e_hdr->ether_dhost[0], ETHER_ADDR_LEN);
         memcpy(&e_hdr->ether_dhost[0], &mac_shost[0], ETHER_ADDR_LEN);
 
-        int res = sr_send_packet(sr, new_pkt, len, interface);
-        if (res != 0) {
-            fprintf(stderr, "Error sending ICMP Echo Reply\n");
-            return;
+        struct sr_arpentry *cached_arp = sr_arpcache_lookup(&sr->cache, ip_hdr->ip_dst);
+        if (cached_arp) {
+          /**
+           * There is a cached ARP entry, so we have the required MAC address.
+           * Set up the packet and send it.
+           */
+
+          /* Update the Ethernet header */
+          memcpy(e_hdr->ether_shost, iface->addr, ETHER_ADDR_LEN);
+          memcpy(e_hdr->ether_dhost, cached_arp->mac, ETHER_ADDR_LEN);
+
+          int res = sr_send_packet(sr, new_pkt, len, interface);
+          if (res) {
+            fprintf(stderr, "Error forwarding IP packet\n");
+          }
+          free(cached_arp);
+          free(new_pkt);
+        } else {
+          struct sr_arpreq *arp_req = sr_arpcache_queuereq(&sr->cache, ip_hdr->ip_dst, new_pkt, len, interface);
+          handle_arpreq(sr, arp_req);
         }
-        free(new_pkt);
+
     } else if (type == icmp_type_3) {
         /* ICMP type 3 messages */
-        struct sr_if* iface = sr_get_interface(sr, interface);
         unsigned int newlen = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t3_hdr_t);
         uint8_t *new_pkt = (uint8_t *)malloc(newlen);
         if (!new_pkt) {
@@ -474,16 +496,30 @@ void send_icmp_packet(enum sr_icmp_type type, enum sr_icmp_code code,
         memcpy(&e_hdr->ether_dhost[0], &e_orig_hdr->ether_shost[0], ETHER_ADDR_LEN);
         e_hdr->ether_type = htons(ethertype_ip);
 
-        int res = sr_send_packet(sr, new_pkt, newlen, interface);
-        if (res != 0) {
-            fprintf(stderr, "Error sending ICMP Type 3\n");
-            return;
+        struct sr_arpentry *cached_arp = sr_arpcache_lookup(&sr->cache, ip_hdr->ip_dst);
+        if (cached_arp) {
+          /**
+           * There is a cached ARP entry, so we have the required MAC address.
+           * Set up the packet and send it.
+           */
+
+          /* Update the Ethernet header */
+          memcpy(e_hdr->ether_shost, iface->addr, ETHER_ADDR_LEN);
+          memcpy(e_hdr->ether_dhost, cached_arp->mac, ETHER_ADDR_LEN);
+
+          int res = sr_send_packet(sr, new_pkt, len, interface);
+          if (res) {
+            fprintf(stderr, "Error forwarding IP packet\n");
+          }
+          free(cached_arp);
+          free(new_pkt);
+        } else {
+          struct sr_arpreq *arp_req = sr_arpcache_queuereq(&sr->cache, ip_hdr->ip_dst, new_pkt, len, interface);
+          handle_arpreq(sr, arp_req);
         }
-        free(new_pkt);
 
     } else if (type == icmp_type_11) {
         /* ICMP type 11 messages */
-        struct sr_if* iface = sr_get_interface(sr, interface);
         unsigned int newlen = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_icmp_t11_hdr_t);
         uint8_t *new_pkt = (uint8_t *)malloc(newlen);
         if (!new_pkt) {
@@ -522,12 +558,27 @@ void send_icmp_packet(enum sr_icmp_type type, enum sr_icmp_code code,
         memcpy(&e_hdr->ether_dhost[0], &e_orig_hdr->ether_shost[0], ETHER_ADDR_LEN);
         e_hdr->ether_type = htons(ethertype_ip);
 
-        int res = sr_send_packet(sr, new_pkt, newlen, interface);
-        if (res != 0) {
-            fprintf(stderr, "Error sending ICMP Type 11\n");
-            return;
+        struct sr_arpentry *cached_arp = sr_arpcache_lookup(&sr->cache, ip_hdr->ip_dst);
+        if (cached_arp) {
+          /**
+           * There is a cached ARP entry, so we have the required MAC address.
+           * Set up the packet and send it.
+           */
+
+          /* Update the Ethernet header */
+          memcpy(e_hdr->ether_shost, iface->addr, ETHER_ADDR_LEN);
+          memcpy(e_hdr->ether_dhost, cached_arp->mac, ETHER_ADDR_LEN);
+
+          int res = sr_send_packet(sr, new_pkt, len, interface);
+          if (res) {
+            fprintf(stderr, "Error forwarding IP packet\n");
+          }
+          free(cached_arp);
+          free(new_pkt);
+        } else {
+          struct sr_arpreq *arp_req = sr_arpcache_queuereq(&sr->cache, ip_hdr->ip_dst, new_pkt, len, interface);
+          handle_arpreq(sr, arp_req);
         }
-        free(new_pkt);
 
     } else {
         fprintf(stderr, "Unknown ICMP type: %d\n", type);
@@ -586,12 +637,13 @@ void handle_arp_packet(struct sr_instance* sr, uint8_t *packet, unsigned int len
       fprintf(stderr, "malloc() failed!\n");
       return;
     }
+
     memcpy(new_pkt, packet, len);
     sr_ethernet_hdr_t *new_e_hdr = (sr_ethernet_hdr_t*)new_pkt;
     sr_arp_hdr_t *new_a_hdr = (sr_arp_hdr_t*)(new_pkt + sizeof(sr_ethernet_hdr_t));
     /* setup ethernet header */
     memcpy(new_e_hdr->ether_shost, iface->addr, ETHER_ADDR_LEN);
-    memcpy(new_e_hdr->ether_dhost, a_hdr->ar_sha, ETHER_ADDR_LEN);
+    memcpy(new_e_hdr->ether_dhost, e_hdr->ether_shost, ETHER_ADDR_LEN);
     new_e_hdr->ether_type = htons(ethertype_arp);
     /* setup arp header */
     new_a_hdr->ar_op = htons(arp_op_reply);
@@ -607,6 +659,7 @@ void handle_arp_packet(struct sr_instance* sr, uint8_t *packet, unsigned int len
       return;
     }
     free(new_pkt);
+
   } else if (arp_op == arp_op_reply) {
     /**
      * The ARP reply processing code should move entries from the ARP request
@@ -623,15 +676,15 @@ void handle_arp_packet(struct sr_instance* sr, uint8_t *packet, unsigned int len
                                                    a_hdr->ar_sip);
     if (arp_req) {
       struct sr_packet *pkt = arp_req->packets;
-      struct sr_ethernet_hdr* new_e_hdr = 0;
-      struct sr_arp_hdr* new_a_hdr = 0;
+      sr_ethernet_hdr_t *new_e_hdr = 0;
+      sr_arp_hdr_t *new_a_hdr = 0;
 
       while (pkt) {
         /* Update src/dst MAC addresses for the pending packet */
-        new_e_hdr = (struct sr_ethernet_hdr*)pkt->buf;
-        new_a_hdr = (struct sr_arp_hdr*)(pkt->buf + sizeof(struct sr_ethernet_hdr));
+        new_e_hdr = (sr_ethernet_hdr_t*)pkt->buf;
+        new_a_hdr = (sr_arp_hdr_t*)(pkt->buf + sizeof(sr_ethernet_hdr_t));
         memcpy(new_e_hdr->ether_shost, iface->addr, ETHER_ADDR_LEN);
-        memcpy(new_e_hdr->ether_dhost, e_hdr->ether_shost, ETHER_ADDR_LEN);
+        memcpy(new_e_hdr->ether_dhost, a_hdr->ar_sha, ETHER_ADDR_LEN);
 
         int res = sr_send_packet(sr, pkt->buf, pkt->len, pkt->iface);
         if (res != 0) {
