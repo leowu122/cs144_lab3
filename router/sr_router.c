@@ -91,9 +91,9 @@ void sr_handlepacket(struct sr_instance* sr,
   assert(interface);
 
   printf("*** -> Received packet of length %d \n",len);
-  print_hdrs(packet, len);
 
   /* fill in code here */
+  print_hdrs(packet, len);
 
   pkttype = ethertype(packet);
   if (pkttype == ethertype_ip) {
@@ -420,7 +420,6 @@ void send_icmp_packet(enum sr_icmp_type type, enum sr_icmp_code code,
 
         /* setup IP */
         uint32_t ip_src = ip_hdr->ip_src;
-        uint32_t ip_dst = ip_hdr->ip_dst;
         ip_hdr->ip_src = ip_hdr->ip_dst;
         ip_hdr->ip_dst = ip_src;
         ip_hdr->ip_ttl = INIT_TTL;
@@ -676,15 +675,13 @@ void handle_arp_packet(struct sr_instance* sr, uint8_t *packet, unsigned int len
                                                    a_hdr->ar_sip);
     if (arp_req) {
       struct sr_packet *pkt = arp_req->packets;
-      sr_ethernet_hdr_t *new_e_hdr = 0;
-      sr_arp_hdr_t *new_a_hdr = 0;
+      sr_ethernet_hdr_t *new_e_hdr = (sr_ethernet_hdr_t*)pkt->buf;
+      sr_arp_hdr_t *new_a_hdr = (sr_arp_hdr_t*)(pkt->buf + sizeof(sr_ethernet_hdr_t));
 
       while (pkt) {
         /* Update src/dst MAC addresses for the pending packet */
-        new_e_hdr = (sr_ethernet_hdr_t*)pkt->buf;
-        new_a_hdr = (sr_arp_hdr_t*)(pkt->buf + sizeof(sr_ethernet_hdr_t));
         memcpy(new_e_hdr->ether_shost, iface->addr, ETHER_ADDR_LEN);
-        memcpy(new_e_hdr->ether_dhost, a_hdr->ar_sha, ETHER_ADDR_LEN);
+        memcpy(new_e_hdr->ether_dhost, new_a_hdr->ar_sha, ETHER_ADDR_LEN);
 
         int res = sr_send_packet(sr, pkt->buf, pkt->len, pkt->iface);
         if (res != 0) {
@@ -699,3 +696,20 @@ void handle_arp_packet(struct sr_instance* sr, uint8_t *packet, unsigned int len
     fprintf(stderr, "Unsupported arp packet: %d\n", arp_op);
   }
 }
+
+/**
+ * Check ARP cache entries, before sending a packet to a next hop.
+ */
+int check_arpcache(struct sr_instance *sr, uint32_t next_hop_ip, sr_ethernet_hdr_t *e_hdr, unsigned int len, char *interface) {
+    struct sr_arpcache *cache = &(sr->cache);
+    struct sr_arpentry *entry = sr_arpcache_lookup(cache, next_hop_ip);
+    if (entry) {
+        memcpy(e_hdr->ether_dhost, entry->mac, ETHER_ADDR_LEN);
+        return 0;
+    }
+
+    struct sr_arpreq *arp_req = sr_arpcache_queuereq(cache, next_hop_ip, (uint8_t*)e_hdr, len, interface);
+    handle_arpreq(sr, arp_req);
+    return -1;
+}
+

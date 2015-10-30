@@ -264,13 +264,12 @@ void handle_arpreq(struct sr_instance *sr, struct sr_arpreq *req) {
     time_t curtime = time(NULL);
     if (difftime(curtime, req->sent) > 1.0) {
         if (req->times_sent >= 5) {
-            /* TODO: Leo */
             /* Send destination host unreachable to all packets waiting on this ARP */
-            /* cur_packet = req->packets;
+            cur_packet = req->packets;
             while (cur_packet) {
-                send_icmp_packet(icmp_type_3, icmp_code_1, sr, cur_packet->buf, cur_packet->len, TODO: interface);
+                send_icmp_packet(icmp_type_3, icmp_code_1, sr, cur_packet->buf, cur_packet->len, cur_packet->iface);
                 cur_packet = cur_packet->next;
-            } */
+            }
 
             sr_arpreq_destroy(&(sr->cache), req);
         } else {
