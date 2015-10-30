@@ -410,6 +410,11 @@ void send_icmp_packet(enum sr_icmp_type type, enum sr_icmp_code code,
         sr_ip_hdr_t *ip_hdr = (sr_ip_hdr_t *)(new_pkt + sizeof(sr_ethernet_hdr_t));
         sr_icmp_hdr_t *icmp_hdr = (sr_icmp_hdr_t *)(new_pkt + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t)); 
 
+	struct sr_rt *rt = find_longest_prefix_match(sr, ip_hdr->ip_src);
+	if (!rt) {
+		return;
+	}
+
         /* setup ICMP */
         icmp_hdr->icmp_type = icmp_type_0;
         icmp_hdr->icmp_code = icmp_code_0;
@@ -430,7 +435,7 @@ void send_icmp_packet(enum sr_icmp_type type, enum sr_icmp_code code,
         memcpy(&e_hdr->ether_shost[0], &e_hdr->ether_dhost[0], ETHER_ADDR_LEN);
         memcpy(&e_hdr->ether_dhost[0], &mac_shost[0], ETHER_ADDR_LEN);
 
-        struct sr_arpentry *cached_arp = sr_arpcache_lookup(&sr->cache, ip_hdr->ip_dst);
+        struct sr_arpentry *cached_arp = sr_arpcache_lookup(&sr->cache, rt->gw.s_addr);
         if (cached_arp) {
           /**
            * There is a cached ARP entry, so we have the required MAC address.
@@ -448,7 +453,7 @@ void send_icmp_packet(enum sr_icmp_type type, enum sr_icmp_code code,
           free(cached_arp);
           free(new_pkt);
         } else {
-          struct sr_arpreq *arp_req = sr_arpcache_queuereq(&sr->cache, ip_hdr->ip_dst, new_pkt, len, interface);
+          struct sr_arpreq *arp_req = sr_arpcache_queuereq(&sr->cache, rt->gw.s_addr, new_pkt, len, interface);
         }
 
     } else if (type == icmp_type_3) {
@@ -467,6 +472,11 @@ void send_icmp_packet(enum sr_icmp_type type, enum sr_icmp_code code,
         sr_ip_hdr_t *ip_hdr = (sr_ip_hdr_t *)(new_pkt + sizeof(sr_ethernet_hdr_t));
         sr_icmp_t3_hdr_t *icmp_hdr = (sr_icmp_t3_hdr_t *)(new_pkt + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t)); 
 
+	struct sr_rt *rt = find_longest_prefix_match(sr, ip_hdr->ip_src);
+	if (!rt) {
+		return;
+	}
+	
         /* setup ICMP */
         icmp_hdr->icmp_type = icmp_type_3;
         icmp_hdr->icmp_code = code;
@@ -492,7 +502,7 @@ void send_icmp_packet(enum sr_icmp_type type, enum sr_icmp_code code,
         memcpy(&e_hdr->ether_dhost[0], &e_orig_hdr->ether_shost[0], ETHER_ADDR_LEN);
         e_hdr->ether_type = htons(ethertype_ip);
 
-        struct sr_arpentry *cached_arp = sr_arpcache_lookup(&sr->cache, ip_hdr->ip_dst);
+        struct sr_arpentry *cached_arp = sr_arpcache_lookup(&sr->cache, rt->gw.s_addr);
         if (cached_arp) {
           /**
            * There is a cached ARP entry, so we have the required MAC address.
@@ -510,7 +520,7 @@ void send_icmp_packet(enum sr_icmp_type type, enum sr_icmp_code code,
           free(cached_arp);
           free(new_pkt);
         } else {
-          struct sr_arpreq *arp_req = sr_arpcache_queuereq(&sr->cache, ip_hdr->ip_dst, new_pkt, newlen, interface);
+          struct sr_arpreq *arp_req = sr_arpcache_queuereq(&sr->cache, rt->gw.s_addr, new_pkt, newlen, interface);
         }
 
     } else if (type == icmp_type_11) {
@@ -528,6 +538,11 @@ void send_icmp_packet(enum sr_icmp_type type, enum sr_icmp_code code,
         sr_ethernet_hdr_t *e_hdr = (sr_ethernet_hdr_t *)new_pkt;
         sr_ip_hdr_t *ip_hdr = (sr_ip_hdr_t *)(new_pkt + sizeof(sr_ethernet_hdr_t));
         sr_icmp_t11_hdr_t *icmp_hdr = (sr_icmp_t11_hdr_t *)(new_pkt + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t)); 
+
+	struct sr_rt *rt = find_longest_prefix_match(sr, ip_hdr->ip_src);
+	if (!rt) {
+		return;
+	}
 
         /* setup ICMP */
         icmp_hdr->icmp_type = icmp_type_11;
@@ -553,7 +568,7 @@ void send_icmp_packet(enum sr_icmp_type type, enum sr_icmp_code code,
         memcpy(&e_hdr->ether_dhost[0], &e_orig_hdr->ether_shost[0], ETHER_ADDR_LEN);
         e_hdr->ether_type = htons(ethertype_ip);
 
-        struct sr_arpentry *cached_arp = sr_arpcache_lookup(&sr->cache, ip_hdr->ip_dst);
+        struct sr_arpentry *cached_arp = sr_arpcache_lookup(&sr->cache, rt->gw.s_addr);
         if (cached_arp) {
           /**
            * There is a cached ARP entry, so we have the required MAC address.
@@ -571,7 +586,7 @@ void send_icmp_packet(enum sr_icmp_type type, enum sr_icmp_code code,
           free(cached_arp);
           free(new_pkt);
         } else {
-          struct sr_arpreq *arp_req = sr_arpcache_queuereq(&sr->cache, ip_hdr->ip_dst, new_pkt, newlen, interface);
+          struct sr_arpreq *arp_req = sr_arpcache_queuereq(&sr->cache, rt->gw.s_addr, new_pkt, newlen, interface);
         }
 
     } else {
