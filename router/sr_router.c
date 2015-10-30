@@ -321,8 +321,6 @@ void handle_ip_packet(struct sr_instance *sr, uint8_t *packet, unsigned int len,
 }
 
 /**
- * TODO: Leo
- *
  * Validates the ICMP packet (minimum length, checksum, etc.). Returns 1 if the packet is valid, and 0 otherwise.
  * Use this before sending the ICMP packet in send_icmp_packet().
  */
@@ -373,6 +371,10 @@ int is_icmp_packet_valid(struct sr_instance* sr, uint8_t *packet, unsigned int l
  */
 void send_icmp_packet(enum sr_icmp_type type, enum sr_icmp_code code,
         struct sr_instance *sr, uint8_t *packet, unsigned int len, char *interface) {
+    if (!is_icmp_packet_valid(sr, packet, len)) {
+      fprintf(stderr, "ICMP packet is not valid\n");
+      return;
+    }
 
     struct sr_if *iface = sr_get_interface(sr, interface);
     if (!iface) {
