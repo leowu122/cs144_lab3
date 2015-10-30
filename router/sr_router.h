@@ -69,6 +69,7 @@ void sr_init(struct sr_instance* );
 void sr_handlepacket(struct sr_instance* , uint8_t * , unsigned int , char* );
 void send_icmp_packet(enum sr_icmp_type type, enum sr_icmp_code code,
                       struct sr_instance *sr, uint8_t *packet, unsigned int len, char *interface);
+int check_arpcache(struct sr_instance *sr, uint32_t next_hop_ip, sr_ethernet_hdr_t *e_hdr, unsigned int len, char *interface);
 
 /* -- sr_if.c -- */
 void sr_add_interface(struct sr_instance* , const char* );
