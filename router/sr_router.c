@@ -301,8 +301,7 @@ void handle_ip_packet(struct sr_instance *sr, uint8_t *packet, unsigned int len,
     }
 
     ip_header->ip_ttl--;
-    assert(ip_header->ip_ttl >= 0); /* ip_ttl is unsigned */
-    if (ip_header->ip_ttl == 0) {
+    if (ip_header->ip_ttl <= 0) {
       /* Send ICMP time exceeded */
       send_icmp_packet(icmp_type_11, icmp_code_0, sr, packet, len, interface);
       return;
@@ -506,14 +505,14 @@ void send_icmp_packet(enum sr_icmp_type type, enum sr_icmp_code code,
           memcpy(e_hdr->ether_shost, iface->addr, ETHER_ADDR_LEN);
           memcpy(e_hdr->ether_dhost, cached_arp->mac, ETHER_ADDR_LEN);
 
-          int res = sr_send_packet(sr, new_pkt, len, interface);
+          int res = sr_send_packet(sr, new_pkt, newlen, interface);
           if (res) {
             fprintf(stderr, "Error forwarding IP packet\n");
           }
           free(cached_arp);
           free(new_pkt);
         } else {
-          struct sr_arpreq *arp_req = sr_arpcache_queuereq(&sr->cache, ip_hdr->ip_dst, new_pkt, len, interface);
+          struct sr_arpreq *arp_req = sr_arpcache_queuereq(&sr->cache, ip_hdr->ip_dst, new_pkt, newlen, interface);
           handle_arpreq(sr, arp_req);
         }
 
@@ -568,14 +567,14 @@ void send_icmp_packet(enum sr_icmp_type type, enum sr_icmp_code code,
           memcpy(e_hdr->ether_shost, iface->addr, ETHER_ADDR_LEN);
           memcpy(e_hdr->ether_dhost, cached_arp->mac, ETHER_ADDR_LEN);
 
-          int res = sr_send_packet(sr, new_pkt, len, interface);
+          int res = sr_send_packet(sr, new_pkt, newlen, interface);
           if (res) {
             fprintf(stderr, "Error forwarding IP packet\n");
           }
           free(cached_arp);
           free(new_pkt);
         } else {
-          struct sr_arpreq *arp_req = sr_arpcache_queuereq(&sr->cache, ip_hdr->ip_dst, new_pkt, len, interface);
+          struct sr_arpreq *arp_req = sr_arpcache_queuereq(&sr->cache, ip_hdr->ip_dst, new_pkt, newlen, interface);
           handle_arpreq(sr, arp_req);
         }
 
