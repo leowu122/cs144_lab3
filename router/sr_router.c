@@ -472,7 +472,7 @@ void send_icmp_packet(enum sr_icmp_type type, enum sr_icmp_code code,
         sr_ip_hdr_t *ip_hdr = (sr_ip_hdr_t *)(new_pkt + sizeof(sr_ethernet_hdr_t));
         sr_icmp_t3_hdr_t *icmp_hdr = (sr_icmp_t3_hdr_t *)(new_pkt + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t)); 
 
-	struct sr_rt *rt = find_longest_prefix_match(sr, ip_hdr->ip_src);
+	struct sr_rt *rt = find_longest_prefix_match(sr, ip_hdr);
 	if (!rt) {
 		return;
 	}
