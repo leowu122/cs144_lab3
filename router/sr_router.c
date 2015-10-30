@@ -326,13 +326,12 @@ void handle_ip_packet(struct sr_instance *sr, uint8_t *packet, unsigned int len,
  */
 int is_icmp_packet_valid(struct sr_instance* sr, uint8_t *packet, unsigned int len)
 {
-	/* check the length*/
-	if (len < sizeof(sr_icmp_hdr_t)) {
-		fprintf(stderr, "Invalid ICMP header, insufficient length\n");
-		return 0;
-	}
-	
-	return 1;
+  /* check the length */
+  if (len < sizeof(sr_icmp_hdr_t)) {
+    fprintf(stderr, "Invalid ICMP header, insufficient length\n");
+    return 0;
+  }
+  return 1;
 }
 
 
