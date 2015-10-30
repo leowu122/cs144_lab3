@@ -328,44 +328,36 @@ void handle_ip_packet(struct sr_instance *sr, uint8_t *packet, unsigned int len,
  */
 int is_icmp_packet_valid(struct sr_instance* sr, uint8_t *packet, unsigned int len)
 {
-#if 0
-
-       /* check the length*/
-      if (len < sizeof(sr_icmp_hdr_t))
-       {
-               fprintf(stderr, "Invalid ICMP header, insufficient length\n");
-               return 0;
-       }
-       sr_icmp_hdr_t *icmp_hdr = (sr_icmp_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
-       uint16_t received_cksum = icmp_hdr->icmp_sum;
-       icmp_hdr->icmp_sum = 0;
-
-       uint16_t expected_cksum = cksum(icmp_hdr, sizeof(sr_icmp_hdr_t));
-
-               /* check the checksum*/
-               if (expected_cksum != received_cksum)
-               {
-                       fprintf(stderr, "Invalid ICMP header, insufficient checksum\n");
-                       return 0;
-               }
-
-               /* check echo request*/
-               if (icmp_hdr->icmp_type != icmp_type_0)
-               {
-                       fprintf(stderr, "Invalid ICMP header, not echo request\n");
-                       return 0;
-               }
-               /* check echo reply*/
-               if (icmp_hdr->icmp_code != icmp_code_0)
-               {
-                       fprintf(stderr, "Invalid ICMP header, not echo reply\n");
-                       return 0;
-               }
-
-               return 1;
-       }
-#endif
-  return 0; /* remove this once above ip_hdr is defined */
+	/* check the length*/
+	if (len < sizeof(sr_icmp_hdr_t)) {
+		fprintf(stderr, "Invalid ICMP header, insufficient length\n");
+		return 0;
+	}
+	
+	sr_icmp_hdr_t *icmp_hdr = (sr_icmp_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+	uint16_t received_cksum = icmp_hdr->icmp_sum;
+	icmp_hdr->icmp_sum = 0;
+	uint16_t expected_cksum = cksum(icmp_hdr, sizeof(sr_icmp_hdr_t));
+	
+	/* check the checksum*/
+	if (expected_cksum != received_cksum){
+		fprintf(stderr, "Invalid ICMP header, insufficient checksum\n");
+		return 0;
+	}
+	
+	/* check echo request*/
+	if (icmp_hdr->icmp_type != icmp_type_0) {
+		fprintf(stderr, "Invalid ICMP header, not echo request\n");
+		return 0;
+	}
+	
+	/* check echo reply*/
+	if (icmp_hdr->icmp_code != icmp_code_0) {
+		fprintf(stderr, "Invalid ICMP header, not echo reply\n");
+		return 0;
+	}
+	
+	return 1;
 }
 
 
