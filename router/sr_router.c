@@ -268,7 +268,6 @@ void forward_ip_packet(struct sr_instance *sr, uint8_t *packet, unsigned int len
   } else {
     /* There is no cached ARP entry, so we need to send an ARP request and add this packet to the queue. */
     arp_req = sr_arpcache_queuereq(&sr->cache, routing_entry->gw.s_addr, forward_packet, len, routing_entry->interface);
-    handle_arpreq(sr, arp_req);
   }
 
   free(forward_packet);
@@ -450,7 +449,6 @@ void send_icmp_packet(enum sr_icmp_type type, enum sr_icmp_code code,
           free(new_pkt);
         } else {
           struct sr_arpreq *arp_req = sr_arpcache_queuereq(&sr->cache, ip_hdr->ip_dst, new_pkt, len, interface);
-          handle_arpreq(sr, arp_req);
         }
 
     } else if (type == icmp_type_3) {
@@ -513,7 +511,6 @@ void send_icmp_packet(enum sr_icmp_type type, enum sr_icmp_code code,
           free(new_pkt);
         } else {
           struct sr_arpreq *arp_req = sr_arpcache_queuereq(&sr->cache, ip_hdr->ip_dst, new_pkt, newlen, interface);
-          handle_arpreq(sr, arp_req);
         }
 
     } else if (type == icmp_type_11) {
@@ -575,7 +572,6 @@ void send_icmp_packet(enum sr_icmp_type type, enum sr_icmp_code code,
           free(new_pkt);
         } else {
           struct sr_arpreq *arp_req = sr_arpcache_queuereq(&sr->cache, ip_hdr->ip_dst, new_pkt, newlen, interface);
-          handle_arpreq(sr, arp_req);
         }
 
     } else {
@@ -708,7 +704,6 @@ int check_arpcache(struct sr_instance *sr, uint32_t next_hop_ip, sr_ethernet_hdr
     }
 
     struct sr_arpreq *arp_req = sr_arpcache_queuereq(cache, next_hop_ip, (uint8_t*)e_hdr, len, interface);
-    handle_arpreq(sr, arp_req);
     return -1;
 }
 

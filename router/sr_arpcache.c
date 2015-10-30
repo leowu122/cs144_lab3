@@ -267,6 +267,9 @@ void handle_arpreq(struct sr_instance *sr, struct sr_arpreq *req) {
             /* Send destination host unreachable to all packets waiting on this ARP */
             cur_packet = req->packets;
             while (cur_packet) {
+                printf("ALFJLAJFLKDJFLDKJSLKFJSLDKFJLSDF!\n");
+                print_hdrs(cur_packet->buf, cur_packet->len);
+                printf("ALFJLAJFLKDJFLDKJSLKFJSLDKFJLSDF!\n");
                 send_icmp_packet(icmp_type_3, icmp_code_1, sr, cur_packet->buf, cur_packet->len, cur_packet->iface);
                 cur_packet = cur_packet->next;
             }
