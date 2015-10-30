@@ -223,7 +223,6 @@ void forward_ip_packet(struct sr_instance *sr, uint8_t *packet, unsigned int len
   uint8_t *forward_packet;
   struct sr_if *outgoing_interface;
   struct sr_arpentry *cached_arp;
-  struct sr_arpreq *arp_req;
   int error;
 
   forward_packet = (uint8_t *) malloc(len);
@@ -267,7 +266,7 @@ void forward_ip_packet(struct sr_instance *sr, uint8_t *packet, unsigned int len
     free(cached_arp);
   } else {
     /* There is no cached ARP entry, so we need to send an ARP request and add this packet to the queue. */
-    arp_req = sr_arpcache_queuereq(&sr->cache, routing_entry->gw.s_addr, forward_packet, len, routing_entry->interface);
+    sr_arpcache_queuereq(&sr->cache, routing_entry->gw.s_addr, forward_packet, len, routing_entry->interface);
   }
 
   free(forward_packet);
@@ -410,10 +409,10 @@ void send_icmp_packet(enum sr_icmp_type type, enum sr_icmp_code code,
         sr_ip_hdr_t *ip_hdr = (sr_ip_hdr_t *)(new_pkt + sizeof(sr_ethernet_hdr_t));
         sr_icmp_hdr_t *icmp_hdr = (sr_icmp_hdr_t *)(new_pkt + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t)); 
 
-	struct sr_rt *rt = find_longest_prefix_match(sr, ip_hdr->ip_src);
-	if (!rt) {
-		return;
-	}
+        struct sr_rt *rt = find_longest_prefix_match(sr, ip_hdr);
+        if (!rt) {
+          return;
+        }
 
         /* setup ICMP */
         icmp_hdr->icmp_type = icmp_type_0;
@@ -453,7 +452,7 @@ void send_icmp_packet(enum sr_icmp_type type, enum sr_icmp_code code,
           free(cached_arp);
           free(new_pkt);
         } else {
-          struct sr_arpreq *arp_req = sr_arpcache_queuereq(&sr->cache, rt->gw.s_addr, new_pkt, len, interface);
+          sr_arpcache_queuereq(&sr->cache, rt->gw.s_addr, new_pkt, len, interface);
         }
 
     } else if (type == icmp_type_3) {
@@ -472,10 +471,10 @@ void send_icmp_packet(enum sr_icmp_type type, enum sr_icmp_code code,
         sr_ip_hdr_t *ip_hdr = (sr_ip_hdr_t *)(new_pkt + sizeof(sr_ethernet_hdr_t));
         sr_icmp_t3_hdr_t *icmp_hdr = (sr_icmp_t3_hdr_t *)(new_pkt + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t)); 
 
-	struct sr_rt *rt = find_longest_prefix_match(sr, ip_hdr);
-	if (!rt) {
-		return;
-	}
+        struct sr_rt *rt = find_longest_prefix_match(sr, ip_hdr);
+        if (!rt) {
+          return;
+        }
 	
         /* setup ICMP */
         icmp_hdr->icmp_type = icmp_type_3;
@@ -520,7 +519,7 @@ void send_icmp_packet(enum sr_icmp_type type, enum sr_icmp_code code,
           free(cached_arp);
           free(new_pkt);
         } else {
-          struct sr_arpreq *arp_req = sr_arpcache_queuereq(&sr->cache, rt->gw.s_addr, new_pkt, newlen, interface);
+          sr_arpcache_queuereq(&sr->cache, rt->gw.s_addr, new_pkt, newlen, interface);
         }
 
     } else if (type == icmp_type_11) {
@@ -539,10 +538,10 @@ void send_icmp_packet(enum sr_icmp_type type, enum sr_icmp_code code,
         sr_ip_hdr_t *ip_hdr = (sr_ip_hdr_t *)(new_pkt + sizeof(sr_ethernet_hdr_t));
         sr_icmp_t11_hdr_t *icmp_hdr = (sr_icmp_t11_hdr_t *)(new_pkt + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t)); 
 
-	struct sr_rt *rt = find_longest_prefix_match(sr, ip_hdr->ip_src);
-	if (!rt) {
-		return;
-	}
+        struct sr_rt *rt = find_longest_prefix_match(sr, ip_hdr);
+        if (!rt) {
+          return;
+        }
 
         /* setup ICMP */
         icmp_hdr->icmp_type = icmp_type_11;
@@ -586,7 +585,7 @@ void send_icmp_packet(enum sr_icmp_type type, enum sr_icmp_code code,
           free(cached_arp);
           free(new_pkt);
         } else {
-          struct sr_arpreq *arp_req = sr_arpcache_queuereq(&sr->cache, rt->gw.s_addr, new_pkt, newlen, interface);
+          sr_arpcache_queuereq(&sr->cache, rt->gw.s_addr, new_pkt, newlen, interface);
         }
 
     } else {
@@ -718,7 +717,7 @@ int check_arpcache(struct sr_instance *sr, uint32_t next_hop_ip, sr_ethernet_hdr
         return 0;
     }
 
-    struct sr_arpreq *arp_req = sr_arpcache_queuereq(cache, next_hop_ip, (uint8_t*)e_hdr, len, interface);
+    sr_arpcache_queuereq(cache, next_hop_ip, (uint8_t*)e_hdr, len, interface);
     return -1;
 }
 
